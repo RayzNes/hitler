@@ -15,10 +15,13 @@ def save_game(player):
         "fuel": player.fuel,
         "support": player.support,
         "economy": player.economy,
+        "tech": player.tech,
+        "morale": player.morale,
         "decisions": player.decisions,
         "successful_missions": player.successful_missions,
         "year": player.year,
-        "history": player.history
+        "history": player.history,
+        "regions": player.regions
     }
     try:
         if IS_PYODIDE:
