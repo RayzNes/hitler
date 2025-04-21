@@ -21,7 +21,10 @@ def save_game(player):
         "successful_missions": player.successful_missions,
         "year": player.year,
         "history": player.history,
-        "regions": player.regions
+        "regions": player.regions,
+        "relations": player.relations,
+        "event_history": player.event_history,
+        "turns_since_propaganda": player.turns_since_propaganda
     }
     try:
         if IS_PYODIDE:

@@ -13,6 +13,9 @@ class Player:
         self.year = 1943  # Текущий год в игре
         self.history = []  # История выборов игрока
         self.regions = {"east": 100, "west": 50, "africa": 20}  # Контроль регионов (%)
+        self.relations = {"Italy": 50, "Japan": 50, "Neutral": 20}  # Отношения с союзниками
+        self.event_history = []  # История событий для цепочек
+        self.turns_since_propaganda = float('inf')  # Счётчик ходов с последнего использования пропаганды
 
     def is_alive(self):
         """Проверка, может ли игрок продолжать игру."""
