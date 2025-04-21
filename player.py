@@ -16,6 +16,12 @@ class Player:
         self.relations = {"Italy": 50, "Japan": 50, "Neutral": 20}  # Отношения с союзниками
         self.event_history = []  # История событий для цепочек
         self.turns_since_propaganda = float('inf')  # Счётчик ходов с последнего использования пропаганды
+        self.bomb_shelters_built = False  # Построены ли бомбоубежища
+        self.goals = {  # Долгосрочные цели
+            "hold_east_1945": {"description": "Удержать Восточный фронт до 1945 года", "completed": False},
+            "develop_v2": {"description": "Разработать V-2", "completed": False},
+            "high_support_1944": {"description": "Сохранить поддержку выше 70 в 1944 году", "completed": False}
+        }
 
     def is_alive(self):
         """Проверка, может ли игрок продолжать игру."""

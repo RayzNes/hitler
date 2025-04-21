@@ -16,7 +16,7 @@ initialize_fonts()
 WIDTH = 1000
 HEIGHT = 800
 FPS = 60
-EVENT_CHANCE = 0.3  # Вероятность события
+EVENT_CHANCE = 0.3  # Вероятность обычного события
 DEBUG_MODE = False  # Режим отладки
 
 # Настройка экрана
@@ -70,8 +70,63 @@ def check_relations_bonuses_penalties():
             result_text.append(f"{ally} разрывает альянс! Поддержка -15.")
 
 
+def check_goals():
+    """Проверяет выполнение долгосрочных целей и начисляет бонусы."""
+    if player.year >= 1945 and player.regions["east"] > 50 and not player.goals["hold_east_1945"]["completed"]:
+        player.goals["hold_east_1945"]["completed"] = True
+        player.support += 50
+        player.morale += 20
+        result_text.append("Цель достигнута: Удержать Восточный фронт до 1945 года! Поддержка +50, Мораль +20.")
+
+    if "Финансировать проект V-2" in player.history and not player.goals["develop_v2"]["completed"]:
+        player.goals["develop_v2"]["completed"] = True
+        player.tech += 30
+        player.support += 20
+        result_text.append("Цель достигнута: Разработать V-2! Технологии +30, Поддержка +20.")
+
+    if player.year >= 1944 and player.support > 70 and not player.goals["high_support_1944"]["completed"]:
+        player.goals["high_support_1944"]["completed"] = True
+        player.economy += 30
+        player.morale += 15
+        result_text.append("Цель достигнута: Сохранить поддержку выше 70 в 1944 году! Экономика +30, Мораль +15.")
+
+
+def set_ending():
+    """Определяет концовку игры."""
+    if player.successful_missions > 10 and player.year >= 1945:
+        player.ending_text = "Вы переломили ход войны, но победа недостижима. Ваши усилия вошли в историю."
+    elif player.support < 10:
+        player.ending_text = "Народ восстал, режим пал. Ваше правление закончилось в хаосе."
+    elif player.army < 10:
+        player.ending_text = "Ваши армии разбиты, враг в Берлине. Германия капитулировала."
+    else:
+        player.ending_text = (
+            "Раннее поражение: Германия пала в 1943." if player.year == 1943 else
+            "Вы продержались до 1944, но силы иссякли." if player.year == 1944 else
+            "Удержание позиций до 1945: редкий успех."
+        )
+
+
 def apply_event_effects(choice_idx=None):
-    """Применяет эффекты события."""
+    """Применяет эффекты события, учитывая смягчение катастроф."""
+    event_effects = current_event["effect"].copy()
+
+    # Смягчение последствий катастроф
+    if current_event.get("id") == "berlin_bombing":
+        if player.bomb_shelters_built:
+            for resource in event_effects:
+                event_effects[resource] = int(event_effects[resource] * 0.5)  # Урон снижен на 50%
+            result_text.append("Бомбоубежища смягчили урон от бомбардировки!")
+        elif player.tech > 70:
+            for resource in event_effects:
+                event_effects[resource] = int(event_effects[resource] * 0.75)  # Урон снижен на 25%
+            result_text.append("Высокие технологии снизили урон от бомбардировки!")
+
+    if current_event.get("id") == "rear_epidemic" and player.economy > 70:
+        for resource in event_effects:
+            event_effects[resource] = int(event_effects[resource] * 0.75)  # Урон снижен на 25%
+        result_text.append("Сильная экономика позволила справиться с эпидемией!")
+
     if current_event["choices"] and choice_idx is not None:
         choice = current_event["choices"][choice_idx]
         success = random.random() < choice.get("success_chance", 1.0)
@@ -85,7 +140,7 @@ def apply_event_effects(choice_idx=None):
             player.support -= 10
             result_text.append(f"Провал! {choice['text'].lower()} не удалось. Поддержка -10.")
     else:
-        for resource, value in current_event["effect"].items():
+        for resource, value in event_effects.items():
             setattr(player, resource, getattr(player, resource) + value)
         for ally, value in current_event["relations_change"].items():
             player.relations[ally] = max(0, min(100, player.relations[ally] + value))
@@ -119,6 +174,8 @@ def process_choice(choice_idx):
         player.turns_since_propaganda = 0
     else:
         player.turns_since_propaganda += 1
+    if choice["text"] == "Построить бомбоубежища":
+        player.bomb_shelters_built = True
 
     if current_mission["region"] and current_mission["region"] in player.regions:
         player.regions[current_mission["region"]] += choice["region_change"]
@@ -145,8 +202,10 @@ def process_choice(choice_idx):
 
     check_region_penalties()
     check_relations_bonuses_penalties()
+    check_goals()
 
     if not player.is_alive():
+        set_ending()
         result_text.append("Вы потеряли контроль. Игра окончена.")
     else:
         result_text.append("Готовьтесь к следующей миссии.")

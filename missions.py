@@ -63,6 +63,15 @@ missions = [
             {"text": "Кража технологий", "success_chance": 0.5, "army_cost": 5, "fuel_cost": 5, "support_cost": 15, "economy_cost": 25, "tech_cost": 20, "reward": 50, "region_change": 0, "morale_change": 0, "relations_change": {"Neutral": -15}, "hint": "Большая награда, высокий риск"},
             {"text": "Отказаться от операции", "success_chance": 0.9, "army_cost": 0, "fuel_cost": 0, "support_cost": 20, "economy_cost": 5, "tech_cost": 0, "reward": 10, "region_change": 0, "morale_change": -5, "relations_change": {}, "hint": "Безопасно, но теряется шанс"}
         ]
+    },
+    {
+        "text": "Подготовка к бомбардировкам: союзники усиливают авиацию. Как защититься?",
+        "region": None,
+        "choices": [
+            {"text": "Построить бомбоубежища", "success_chance": 0.8, "army_cost": 10, "fuel_cost": 10, "support_cost": 10, "economy_cost": 30, "tech_cost": 10, "reward": 20, "region_change": 0, "morale_change": 5, "relations_change": {}, "hint": "Защищает от бомбардировок, но дорого"},
+            {"text": "Усилить ПВО", "success_chance": 0.6, "army_cost": 20, "fuel_cost": 15, "support_cost": 15, "economy_cost": 20, "tech_cost": 15, "reward": 30, "region_change": 0, "morale_change": 0, "relations_change": {}, "hint": "Снижает урон, но требует технологий"},
+            {"text": "Игнорировать угрозу", "success_chance": 0.9, "army_cost": 5, "fuel_cost": 5, "support_cost": 20, "economy_cost": 5, "tech_cost": 0, "reward": 10, "region_change": 0, "morale_change": -5, "relations_change": {"Neutral": -5}, "hint": "Экономит ресурсы, но риск катастрофы"}
+        ]
     }
 ]
 
@@ -70,6 +79,9 @@ def get_mission(history, player):
     # Если игрок часто подавляет протесты, увеличиваем вероятность миссий с беспорядками
     if history.count("Подавить протесты") >= 2:
         return missions[2] if random.random() < 0.5 else random.choice(missions)
+    # Если экономика низкая, увеличиваем вероятность миссии по бомбоубежищам
+    if player.economy < 50 and not player.bomb_shelters_built:
+        return missions[7] if random.random() < 0.3 else random.choice(missions)
     return random.choice(missions)
 
 def adjust_success_chance(mission, player):

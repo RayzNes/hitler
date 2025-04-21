@@ -24,7 +24,10 @@ def save_game(player):
         "regions": player.regions,
         "relations": player.relations,
         "event_history": player.event_history,
-        "turns_since_propaganda": player.turns_since_propaganda
+        "turns_since_propaganda": player.turns_since_propaganda,
+        "bomb_shelters_built": player.bomb_shelters_built,
+        "goals": player.goals,
+        "ending_text": getattr(player, "ending_text", "")
     }
     try:
         if IS_PYODIDE:

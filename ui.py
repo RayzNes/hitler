@@ -1,5 +1,6 @@
 import pygame
 import math
+import random
 
 # Цвета
 WHITE = (255, 255, 255)
@@ -15,6 +16,25 @@ small_font = None
 
 # Переменная для анимации
 animation_time = 0
+
+# Исторические факты по годам
+historical_facts = {
+    1943: [
+        "1943: Сталинградская битва завершилась победой СССР.",
+        "1943: Союзники высадились на Сицилии, начав Итальянскую кампанию.",
+        "1943: Курская битва стала крупнейшим танковым сражением в истории."
+    ],
+    1944: [
+        "1944: Операция 'Багратион' освободила Белоруссию от немецкой оккупации.",
+        "1944: Высадка в Нормандии открыла Западный фронт.",
+        "1944: Варшавское восстание было подавлено немецкими войсками."
+    ],
+    1945: [
+        "1945: Советские войска вошли в Берлин, завершая войну в Европе.",
+        "1945: Ялтинская конференция определила послевоенное устройство мира.",
+        "1945: Первое применение V-2 против Лондона."
+    ]
+}
 
 def initialize_fonts():
     global font, small_font
@@ -89,8 +109,14 @@ def render_game_state(screen, game_state, player, current_mission, current_event
         draw_text(screen, stats, font,
                   RED if any(v < 30 for v in [player.army, player.fuel, player.support, player.economy, player.tech, player.morale]) else BLACK,
                   50, 50, 700)
+        # Отображение целей
+        goals_text = "Цели: " + ", ".join([f"{goal['description']} [{'✓' if goal['completed'] else ' '}]" for goal in player.goals.values()])
+        draw_text(screen, goals_text, small_font, BLACK, 50, 100, 700)
         draw_text(screen, "Новая миссия начинается...", small_font, BLACK, 50, 150, 700)
         draw_text(screen, current_mission["text"], small_font, BLACK, 50, 200, 700)
+        # Историческая справка
+        fact = random.choice(historical_facts.get(player.year, ["Исторических данных нет."]))
+        draw_text(screen, f"История: {fact}", small_font, BLACK, 50, 300, 700)
         draw_text(screen, "Нажмите ПРОБЕЛ для продолжения", font, BLACK, 50, 350)
     elif game_state == "choice":
         stats = (f"Год: {player.year}  Армия: {player.army}  Топливо: {player.fuel}  "
@@ -100,6 +126,8 @@ def render_game_state(screen, game_state, player, current_mission, current_event
         draw_text(screen, stats, font,
                   RED if any(v < 30 for v in [player.army, player.fuel, player.support, player.economy, player.tech, player.morale]) else BLACK,
                   50, 50, 700)
+        goals_text = "Цели: " + ", ".join([f"{goal['description']} [{'✓' if goal['completed'] else ' '}]" for goal in player.goals.values()])
+        draw_text(screen, goals_text, small_font, BLACK, 50, 100, 700)
         draw_text(screen, current_mission["text"], small_font, BLACK, 50, 150, 700)
         for i, choice in enumerate(choices):
             draw_text(screen, f"{i + 1}. {choice['text']} ({choice['hint']})", small_font, BLACK, 50, 250 + i * 50, 700)
@@ -112,8 +140,13 @@ def render_game_state(screen, game_state, player, current_mission, current_event
         draw_text(screen, stats, font,
                   RED if any(v < 30 for v in [player.army, player.fuel, player.support, player.economy, player.tech, player.morale]) else BLACK,
                   50, 50, 700)
+        goals_text = "Цели: " + ", ".join([f"{goal['description']} [{'✓' if goal['completed'] else ' '}]" for goal in player.goals.values()])
+        draw_text(screen, goals_text, small_font, BLACK, 50, 100, 700)
         draw_text(screen, "Событие!", small_font, BLACK, 50, 150, 700)
         draw_text(screen, current_event["text"], small_font, BLACK, 50, 200, 700)
+        # Историческая справка
+        fact = random.choice(historical_facts.get(player.year, ["Исторических данных нет."]))
+        draw_text(screen, f"История: {fact}", small_font, BLACK, 50, 300, 700)
         if current_event["choices"]:
             for i, choice in enumerate(current_event["choices"]):
                 draw_text(screen, f"{i + 1}. {choice['text']}", small_font, BLACK, 50, 250 + i * 50, 700)
@@ -128,23 +161,23 @@ def render_game_state(screen, game_state, player, current_mission, current_event
         draw_text(screen, stats, font,
                   RED if any(v < 30 for v in [player.army, player.fuel, player.support, player.economy, player.tech, player.morale]) else BLACK,
                   50, 50, 700)
+        goals_text = "Цели: " + ", ".join([f"{goal['description']} [{'✓' if goal['completed'] else ' '}]" for goal in player.goals.values()])
+        draw_text(screen, goals_text, small_font, BLACK, 50, 100, 700)
         y = 150
         for line in result_text:
             y += draw_text(screen, line, small_font, BLACK, 50, y, 700)
         draw_text(screen, "Нажмите ПРОБЕЛ для продолжения, S для сохранения", font, BLACK, 50, y + 50)
     elif game_state == "game_over":
         draw_text(screen, "Игра окончена", font, BLACK, 50, 50)
-        ending_text = (
-            "Раннее поражение: Германия пала в 1943." if player.year == 1943 else
-            "Вы продержались до 1944, но силы иссякли." if player.year == 1944 else
-            "Удержание позиций до 1945: редкий успех."
-        )
-        draw_text(screen, ending_text, font, BLACK, 50, 100)
+        # Концовка определяется в main.py
+        draw_text(screen, player.ending_text, font, BLACK, 50, 100, 900)
         stats = (f"Решения: {player.decisions}, Успешные миссии: {player.successful_missions}, "
                  f"Год: {player.year}, Технологии: {player.tech}, Мораль: {player.morale}, "
                  f"Италия: {player.relations['Italy']}, Япония: {player.relations['Japan']}")
-        draw_text(screen, stats, font, BLACK, 50, 150)
-        draw_text(screen, "Нажмите R для перезапуска", font, BLACK, 50, 250)
+        draw_text(screen, stats, font, BLACK, 50, 200, 900)
+        goals_text = "Цели: " + ", ".join([f"{goal['description']} [{'✓' if goal['completed'] else ' '}]" for goal in player.goals.values()])
+        draw_text(screen, goals_text, small_font, BLACK, 50, 300, 900)
+        draw_text(screen, "Нажмите R для перезапуска", font, BLACK, 50, 350)
 
     if debug_mode:
         debug_info = f"State: {game_state}, Mission: {current_mission['text'] if current_mission else 'None'}"
