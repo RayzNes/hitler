@@ -12,7 +12,7 @@ class Player:
         self.successful_missions = 0  # Количество успешных миссий
         self.year = 1943  # Текущий год в игре
         self.history = []  # История выборов игрока
-        self.regions = {"east": 100, "west": 50, "africa": 20}  # Контроль регионов (%)
+        self.regions = {"east": 100, "west": 50, "africa": 20, "atlantic": 30, "balkans": 40}  # Контроль регионов (%)
         self.relations = {"Italy": 50, "Japan": 50, "Neutral": 20}  # Отношения с союзниками
         self.event_history = []  # История событий для цепочек
         self.turns_since_propaganda = float('inf')  # Счётчик ходов с последнего использования пропаганды

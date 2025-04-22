@@ -8,7 +8,7 @@ IS_PYODIDE = platform.system() == "Emscripten"
 if IS_PYODIDE:
     import js
 
-def save_game(player):
+def save_game(player, autosave=False):
     """Сохраняет состояние игрока."""
     player_data = {
         "army": player.army,
@@ -32,10 +32,12 @@ def save_game(player):
     try:
         if IS_PYODIDE:
             if js.window.localStorage:
-                js.window.localStorage.setItem("game_save", json.dumps(player_data))
+                key = "game_autosave" if autosave else "game_save"
+                js.window.localStorage.setItem(key, json.dumps(player_data))
                 return True
         else:
-            with open("game_save.json", "w", encoding="utf-8") as f:
+            filename = "game_autosave.json" if autosave else "game_save.json"
+            with open(filename, "w", encoding="utf-8") as f:
                 json.dump(player_data, f, ensure_ascii=False)
                 return True
     except Exception as e:
@@ -43,19 +45,22 @@ def save_game(player):
         return False
     return False
 
-def load_game():
+def load_game(autosave=False):
     """Загружает состояние игрока."""
     try:
         if IS_PYODIDE:
-            if js.window.localStorage and js.window.localStorage.getItem("game_save"):
-                player_data = json.loads(js.window.localStorage.getItem("game_save"))
-                from player import Player
-                player = Player()
-                player.__dict__.update(player_data)
-                return player
+            if js.window.localStorage:
+                key = "game_autosave" if autosave else "game_save"
+                if js.window.localStorage.getItem(key):
+                    player_data = json.loads(js.window.localStorage.getItem(key))
+                    from player import Player
+                    player = Player()
+                    player.__dict__.update(player_data)
+                    return player
         else:
-            if os.path.exists("game_save.json"):
-                with open("game_save.json", "r", encoding="utf-8") as f:
+            filename = "game_autosave.json" if autosave else "game_save.json"
+            if os.path.exists(filename):
+                with open(filename, "r", encoding="utf-8") as f:
                     player_data = json.load(f)
                     from player import Player
                     player = Player()
