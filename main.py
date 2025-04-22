@@ -8,7 +8,7 @@ from missions import get_mission, adjust_success_chance
 from events import get_event
 from ui import draw_text, render_game_state, initialize_fonts
 from savegame import save_game, load_game
-from game_config import WIDTH, HEIGHT, FPS, EVENT_CHANCE, DEBUG_MODE
+from game_config import WIDTH, HEIGHT, FPS, DIFFICULTY_MODIFIERS, DEBUG_MODE
 
 # Настройка логирования
 logging.basicConfig(filename="game.log", level=logging.INFO, format="%(asctime)s - %(message)s")
@@ -30,17 +30,29 @@ choices = []
 result_text = []
 running = True
 sandbox_mode = False
+difficulty = "normal"
+event_chance = DIFFICULTY_MODIFIERS["normal"]["event_chance"]
 
-def setup():
-    global player, game_state, current_mission, current_event, choices, result_text, sandbox_mode
+def setup(difficulty_level="normal"):
+    global player, game_state, current_mission, current_event, choices, result_text, sandbox_mode, difficulty, event_chance
     player = Player()
+    difficulty = difficulty_level
+    resource_bonus = DIFFICULTY_MODIFIERS[difficulty]["resource_bonus"]
+    event_chance = DIFFICULTY_MODIFIERS[difficulty]["event_chance"]
+    player.army += resource_bonus
+    player.fuel += resource_bonus
+    player.support += resource_bonus
+    player.economy += resource_bonus
+    player.tech += resource_bonus
+    player.morale += resource_bonus
+    player.reputation += resource_bonus
     game_state = "start"
     current_mission = None
     current_event = None
     choices = []
     result_text = []
     sandbox_mode = False
-    logging.info("Game reset. New player initialized.")
+    logging.info(f"Game reset. Difficulty: {difficulty}. Resource bonus: {resource_bonus}, Event chance: {event_chance}")
 
 def check_region_penalties():
     """Проверяет потерю регионов и применяет штрафы."""
@@ -70,6 +82,33 @@ def check_relations_bonuses_penalties():
             player.relations[ally] = 0
             result_text.append(f"{ally} разрывает альянс! Поддержка -15.")
             logging.info(f"{ally} alliance broken. Support -15.")
+
+def check_investments():
+    """Проверяет и применяет эффекты долгосрочных инвестиций."""
+    for investment in player.investments[:]:
+        investment["turns_left"] -= 1
+        if investment["turns_left"] <= 0:
+            for resource, value in investment["effect"].items():
+                setattr(player, resource, getattr(player, resource) + value)
+            result_text.append(f"Инвестиция '{investment['type']}' завершена! Эффект: {', '.join([f'{k}: +{v}' for k, v in investment['effect'].items()])}")
+            logging.info(f"Investment '{investment['type']}' completed. Effects: {investment['effect']}")
+            player.investments.remove(investment)
+
+def check_consecutive_successes():
+    """Проверяет серию успешных миссий и начисляет бонусы."""
+    if player.consecutive_successes >= 3:
+        bonuses = [
+            {"fuel": 20, "text": "Серия успехов! +20 топлива."},
+            {"morale": 10, "text": "Серия успехов! +10 морали."},
+            {"support": 15, "text": "Серия успехов! +15 поддержки."}
+        ]
+        bonus = random.choice(bonuses)
+        for resource, value in bonus.items():
+            if resource != "text":
+                setattr(player, resource, getattr(player, resource) + value)
+        result_text.append(bonus["text"])
+        logging.info(f"Consecutive success bonus: {bonus['text']}")
+        player.consecutive_successes = 0
 
 def check_goals():
     """Проверяет выполнение долгосрочных целей и начисляет бонусы."""
@@ -102,6 +141,8 @@ def set_ending():
         player.ending_text = "Народ восстал, режим пал. Ваше правление закончилось в хаосе."
     elif player.army < 10:
         player.ending_text = "Ваши армии разбиты, враг в Берлине. Германия капитулировала."
+    elif player.reputation < 10:
+        player.ending_text = "Ваша репутация разрушена. Мир отвернулся от вас, и союзники покинули."
     else:
         player.ending_text = (
             "Раннее поражение: Германия пала в 1943." if player.year == 1943 else
@@ -138,9 +179,11 @@ def apply_event_effects(choice_idx=None):
         success = random.random() < choice.get("success_chance", 1.0)
         if success:
             for resource, value in choice["effect"].items():
-                setattr(player, resource, getattr(player, resource) + value)
-            for ally, value in choice["relations_change"].items():
-                player.relations[ally] = max(0, min(100, player.relations[ally] + value))
+                if resource == "relations_change":
+                    for ally, rel_value in value.items():
+                        player.relations[ally] = max(0, min(100, player.relations[ally] + rel_value))
+                else:
+                    setattr(player, resource, getattr(player, resource) + value)
             result_text.append(f"Успех! {choice['text'].lower()} прошло успешно.")
             logging.info(f"Event choice success: {choice['text']}")
         else:
@@ -149,9 +192,11 @@ def apply_event_effects(choice_idx=None):
             logging.info(f"Event choice failed: {choice['text']}. Support -10.")
     else:
         for resource, value in event_effects.items():
-            setattr(player, resource, getattr(player, resource) + value)
-        for ally, value in current_event["relations_change"].items():
-            player.relations[ally] = max(0, min(100, player.relations[ally] + value))
+            if resource == "relations_change":
+                for ally, rel_value in value.items():
+                    player.relations[ally] = max(0, min(100, player.relations[ally] + rel_value))
+            else:
+                setattr(player, resource, getattr(player, resource) + value)
 
     if current_event["region"] and current_event["region"] in player.regions:
         player.regions[current_event["region"]] += current_event["region_change"]
@@ -161,22 +206,30 @@ def apply_event_effects(choice_idx=None):
         player.event_history.append(current_event["id"])
     check_region_penalties()
     check_relations_bonuses_penalties()
-    logging.info(f"Event applied. Resources: army={player.army}, fuel={player.fuel}, support={player.support}, economy={player.economy}, tech={player.tech}, morale={player.morale}")
+    logging.info(f"Event applied. Resources: army={player.army}, fuel={player.fuel}, support={player.support}, economy={player.economy}, tech={player.tech}, morale={player.morale}, reputation={player.reputation}")
 
 def process_choice(choice_idx):
     global game_state, result_text
     choice = choices[choice_idx]
+    # Применение бонуса Шпеера (снижение затрат экономики)
+    economy_cost = choice["economy_cost"]
+    if player.leaders["Speer"]["active"]:
+        economy_cost = int(economy_cost * (1 - player.leaders["Speer"]["bonus"]["economy_cost_reduction"]))
     player.army -= choice["army_cost"]
     player.fuel -= choice["fuel_cost"]
     player.support -= choice["support_cost"]
-    player.economy -= choice["economy_cost"]
+    player.economy -= economy_cost
     player.tech -= choice["tech_cost"]
     player.morale += choice["morale_change"]
+    player.reputation += choice.get("reputation_change", 0)
     player.morale = max(0, min(100, player.morale))
+    player.reputation = max(0, min(100, player.reputation))
     for ally, value in choice["relations_change"].items():
         player.relations[ally] = max(0, min(100, player.relations[ally] + value))
     player.decisions += 1
-    player.successful_missions += 1 if random.random() < choice["success_chance"] else 0
+    success = random.random() < choice["success_chance"]
+    player.successful_missions += 1 if success else 0
+    player.consecutive_successes = player.consecutive_successes + 1 if success else 0
     player.history.append(choice["text"])
     if choice["text"] == "Усилить пропаганду":
         player.turns_since_propaganda = 0
@@ -184,6 +237,9 @@ def process_choice(choice_idx):
         player.turns_since_propaganda += 1
     if choice["text"] == "Построить бомбоубежища":
         player.bomb_shelters_built = True
+    if choice.get("investment"):
+        player.investments.append(choice["investment"])
+        logging.info(f"Investment started: {choice['investment']['type']}, Turns: {choice['investment']['turns_left']}")
 
     if current_mission["region"] and current_mission["region"] in player.regions:
         player.regions[current_mission["region"]] += choice["region_change"]
@@ -192,7 +248,7 @@ def process_choice(choice_idx):
     if player.decisions % 5 == 0:
         player.year += 1
 
-    if random.random() < choice["success_chance"]:
+    if success:
         player.support += choice["reward"]
         player.economy += choice["reward"] // 2
         player.tech += choice["reward"] // 4
@@ -212,6 +268,8 @@ def process_choice(choice_idx):
 
     check_region_penalties()
     check_relations_bonuses_penalties()
+    check_investments()
+    check_consecutive_successes()
     check_goals()
 
     if not player.is_alive():
@@ -229,6 +287,8 @@ def update_loop():
     if DEBUG_MODE:
         print(f"State: {game_state}, Mission: {current_mission}, Event: {current_event}, Choices: {len(choices)}")
 
+    mouse_pos = pygame.mouse.get_pos() if game_state not in ["start", "game_over", "stats"] else None
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             save_game(player, autosave=True)  # Автосохранение при выходе
@@ -238,12 +298,27 @@ def update_loop():
             return
         if event.type == pygame.KEYDOWN:
             if game_state == "start":
-                if event.key == pygame.K_SPACE:
+                if event.key == pygame.K_1:
+                    setup("easy")
                     game_state = "mission"
                     current_mission = get_mission(player.history, player)
                     adjust_success_chance(current_mission, player)
                     choices = current_mission["choices"]
-                    logging.info(f"Game started. Mission: {current_mission['text']}")
+                    logging.info(f"Game started. Difficulty: easy")
+                elif event.key == pygame.K_2:
+                    setup("normal")
+                    game_state = "mission"
+                    current_mission = get_mission(player.history, player)
+                    adjust_success_chance(current_mission, player)
+                    choices = current_mission["choices"]
+                    logging.info(f"Game started. Difficulty: normal")
+                elif event.key == pygame.K_3:
+                    setup("hard")
+                    game_state = "mission"
+                    current_mission = get_mission(player.history, player)
+                    adjust_success_chance(current_mission, player)
+                    choices = current_mission["choices"]
+                    logging.info(f"Game started. Difficulty: hard")
                 elif event.key == pygame.K_l:
                     loaded_player = load_game()
                     if loaded_player:
@@ -259,6 +334,7 @@ def update_loop():
                         logging.error("Game load failed.")
                 elif event.key == pygame.K_p and DEBUG_MODE:
                     sandbox_mode = True
+                    setup("normal")
                     game_state = "mission"
                     current_mission = get_mission(player.history, player)
                     adjust_success_chance(current_mission, player)
@@ -269,10 +345,14 @@ def update_loop():
                     player.economy = 999
                     player.tech = 999
                     player.morale = 999
+                    player.reputation = 999
                     result_text = ["Песочница активирована: ресурсы максимальны!"]
                     logging.info("Sandbox mode activated.")
-            elif game_state == "mission" and event.key == pygame.K_SPACE:
-                game_state = "choice"
+            elif game_state == "mission":
+                if event.key == pygame.K_SPACE:
+                    game_state = "choice"
+                elif event.key == pygame.K_t:
+                    game_state = "stats"
             elif game_state == "choice":
                 if event.key == pygame.K_1:
                     process_choice(0)
@@ -287,6 +367,8 @@ def update_loop():
                     else:
                         result_text = ["Ошибка сохранения!"]
                         logging.error("Manual save failed.")
+                elif event.key == pygame.K_t:
+                    game_state = "stats"
             elif game_state == "event":
                 if current_event["choices"]:
                     if event.key == pygame.K_1:
@@ -305,32 +387,39 @@ def update_loop():
                     choices = current_mission["choices"]
                     current_event = None
                     save_game(player, autosave=True)  # Автосохранение
-            elif game_state == "result" and event.key == pygame.K_SPACE:
-                if player.is_alive():
-                    if random.random() < EVENT_CHANCE or sandbox_mode:
-                        game_state = "event"
-                        current_event = get_event(player.history, player)
-                        logging.info(f"Event triggered: {current_event['text']}")
+                if event.key == pygame.K_t:
+                    game_state = "stats"
+            elif game_state == "result":
+                if event.key == pygame.K_SPACE:
+                    if player.is_alive():
+                        if random.random() < event_chance or sandbox_mode:
+                            game_state = "event"
+                            current_event = get_event(player.history, player)
+                            logging.info(f"Event triggered: {current_event['text']}")
+                        else:
+                            game_state = "mission"
+                            current_mission = get_mission(player.history, player)
+                            adjust_success_chance(current_mission, player)
+                            choices = current_mission["choices"]
+                            logging.info(f"Mission triggered: {current_mission['text']}")
+                        result_text = []
                     else:
-                        game_state = "mission"
-                        current_mission = get_mission(player.history, player)
-                        adjust_success_chance(current_mission, player)
-                        choices = current_mission["choices"]
-                        logging.info(f"Mission triggered: {current_mission['text']}")
-                    result_text = []
-                else:
-                    game_state = "game_over"
+                        game_state = "game_over"
+                elif event.key == pygame.K_s:
+                    if save_game(player):
+                        result_text = ["Игра успешно сохранена!"]
+                        logging.info("Game saved manually.")
+                    else:
+                        result_text = ["Ошибка сохранения!"]
+                        logging.error("Manual save failed.")
+                elif event.key == pygame.K_t:
+                    game_state = "stats"
             elif game_state == "game_over" and event.key == pygame.K_r:
-                setup()
-            elif event.key == pygame.K_s and game_state == "result":
-                if save_game(player):
-                    result_text = ["Игра успешно сохранена!"]
-                    logging.info("Game saved manually.")
-                else:
-                    result_text = ["Ошибка сохранения!"]
-                    logging.error("Manual save failed.")
+                setup(difficulty)
+            elif game_state == "stats" and event.key == pygame.K_t:
+                game_state = "mission" if current_mission else "result" if result_text else "event"
 
-    render_game_state(screen, game_state, player, current_mission, current_event, choices, result_text, DEBUG_MODE)
+    render_game_state(screen, game_state, player, current_mission, current_event, choices, result_text, DEBUG_MODE, mouse_pos)
 
 async def main():
     setup()

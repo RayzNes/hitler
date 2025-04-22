@@ -17,8 +17,10 @@ def save_game(player, autosave=False):
         "economy": player.economy,
         "tech": player.tech,
         "morale": player.morale,
+        "reputation": player.reputation,
         "decisions": player.decisions,
         "successful_missions": player.successful_missions,
+        "consecutive_successes": player.consecutive_successes,
         "year": player.year,
         "history": player.history,
         "regions": player.regions,
@@ -26,6 +28,8 @@ def save_game(player, autosave=False):
         "event_history": player.event_history,
         "turns_since_propaganda": player.turns_since_propaganda,
         "bomb_shelters_built": player.bomb_shelters_built,
+        "investments": player.investments,
+        "leaders": player.leaders,
         "goals": player.goals,
         "ending_text": getattr(player, "ending_text", "")
     }
